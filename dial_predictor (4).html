@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>GTO Dial Predictor</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0d0f;
+    --surface: #16161a;
+    --surface2: #1e1e24;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #f0efe8;
+    --muted: #888880;
+    --accent: #ff6a00;
+    --accent2: #dd5500;
+    --green: #4ec97a;
+    --red: #e85555;
+    --blue: #5b9cf6;
+    --font-display: 'Barlow Condensed', sans-serif;
+    --font-body: 'Barlow', sans-serif;
+    --font-mono: 'Share Tech Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; font-size: 15px; }
+
+  /* NAV */
+  nav { display: flex; align-items: center; gap: 0; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .nav-logo { padding: 14px 20px; font-family: var(--font-display); font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: 0.04em; white-space: nowrap; border-right: 1px solid var(--border); }
+  .nav-logo span { color: var(--muted); font-weight: 400; }
+  .nav-tab { padding: 14px 18px; font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); cursor: pointer; border: none; background: none; white-space: nowrap; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* VIEWS */
+  .view { display: none; padding: 20px; max-width: 780px; margin: 0 auto; }
+  .view.active { display: block; }
+
+  /* PREDICT VIEW */
+  .predict-hero { text-align: center; padding: 28px 0 20px; }
+  .predict-hero h1 { font-family: var(--font-display); font-size: 13px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .dial-display { font-family: var(--font-mono); font-size: 82px; line-height: 1; color: var(--accent); letter-spacing: -0.02em; }
+  .dial-display.na { color: var(--muted); font-size: 40px; line-height: 2; }
+  .dial-sub { font-family: var(--font-display); font-size: 13px; color: var(--muted); letter-spacing: 0.08em; margin-top: 6px; }
+  .confidence-bar-wrap { display: flex; align-items: center; gap: 10px; justify-content: center; margin-top: 10px; }
+  .conf-track { width: 120px; height: 4px; background: var(--surface2); border-radius: 2px; }
+  .conf-fill { height: 4px; background: var(--green); border-radius: 2px; transition: width 0.4s; }
+  .conf-label { font-family: var(--font-display); font-size: 13px; color: var(--green); font-weight: 600; }
+
+  .splits-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 18px 0; }
+  .split-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+  .split-card .sl { font-family: var(--font-display); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .split-card .sv { font-family: var(--font-mono); font-size: 18px; color: var(--text); margin-top: 3px; }
+
+  .section-title { font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 20px 0 10px; border-top: 1px solid var(--border); padding-top: 16px; }
+
+  .weather-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .weather-field label { font-family: var(--font-display); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 5px; }
+  .weather-field input, .weather-field select {
+    width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: 6px;
+    color: var(--text); font-family: var(--font-mono); font-size: 16px; padding: 10px 12px;
+    outline: none; transition: border-color 0.15s;
+  }
+  .weather-field input:focus, .weather-field select:focus { border-color: var(--accent); }
+  .weather-field select option { background: var(--surface); }
+  .weather-hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .weather-fetch-bar { display: flex; align-items: center; gap: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; flex-wrap: wrap; }
+  .weather-fetch-bar .wf-status { font-family: var(--font-display); font-size: 13px; color: var(--muted); flex: 1; min-width: 160px; }
+  .weather-fetch-bar .wf-status.ok { color: var(--green); }
+  .weather-fetch-bar .wf-status.err { color: var(--red); }
+  .weather-fetch-bar .wf-status.loading { color: var(--accent); }
+  .btn-weather { background: var(--surface); color: var(--text); border: 1px solid var(--border2); padding: 9px 16px; border-radius: 6px; font-family: var(--font-display); font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+  .btn-weather:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-weather:disabled { opacity: 0.5; cursor: not-allowed; }
+  .fetched-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+  .fetched-pill { background: rgba(78,201,122,0.1); border: 1px solid rgba(78,201,122,0.25); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; color: var(--green); padding: 2px 8px; }
+
+  .std-result { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-top: 10px; display: flex; align-items: center; justify-content: space-between; }
+  .std-result .label { font-family: var(--font-display); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .std-result .value { font-family: var(--font-mono); font-size: 22px; color: var(--accent); }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 22px; border-radius: 6px; border: none; cursor: pointer; font-family: var(--font-display); font-size: 15px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.15s; }
+  .btn-primary { background: var(--accent); color: #111; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-sm { padding: 7px 14px; font-size: 13px; }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border2); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--border2); background: var(--surface2); }
+  .btn-danger { background: transparent; color: var(--red); border: 1px solid rgba(232,85,85,0.3); }
+  .btn-danger:hover { background: rgba(232,85,85,0.1); }
+  .btn-row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+  .match-info { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-top: 10px; font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .match-info strong { color: var(--text); }
+
+  /* RUNS VIEW */
+  .runs-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .runs-toolbar select { background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: var(--font-body); font-size: 14px; padding: 8px 10px; outline: none; }
+
+  .runs-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+  thead { background: var(--surface2); }
+  th { font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 10px 12px; text-align: left; white-space: nowrap; }
+  td { padding: 10px 12px; border-top: 1px solid var(--border); color: var(--text); white-space: nowrap; font-family: var(--font-mono); font-size: 13px; }
+  tr:hover td { background: var(--surface2); }
+  .flagged td { opacity: 0.5; }
+  .flag-badge { display: inline-block; background: rgba(232,85,85,0.15); color: var(--red); font-family: var(--font-display); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 6px; border-radius: 3px; margin-left: 4px; }
+  .track-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-family: var(--font-display); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; }
+  .track-bend { background: rgba(91,156,246,0.15); color: var(--blue); }
+  .track-sydney { background: rgba(78,201,122,0.15); color: var(--green); }
+  .track-willowbank { background: rgba(255,106,0,0.15); color: var(--accent); }
+  .track-other { background: rgba(232,184,75,0.15); color: #e8b84b; }
+
+  /* LOG RUN VIEW */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .form-field.full { grid-column: 1 / -1; }
+  .form-field label { font-family: var(--font-display); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .form-field input, .form-field select {
+    background: var(--surface); border: 1px solid var(--border2); border-radius: 6px;
+    color: var(--text); font-family: var(--font-mono); font-size: 16px; padding: 10px 12px;
+    outline: none; transition: border-color 0.15s; width: 100%;
+  }
+  .form-field input:focus, .form-field select:focus { border-color: var(--accent); }
+  .form-field select option { background: #16161a; }
+  .form-section { margin-bottom: 20px; }
+  .form-section-title { font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .success-banner { background: rgba(78,201,122,0.12); border: 1px solid rgba(78,201,122,0.3); border-radius: 8px; padding: 12px 16px; color: var(--green); font-family: var(--font-display); font-size: 14px; font-weight: 600; letter-spacing: 0.04em; display: none; margin-top: 14px; }
+
+  /* ABOUT */
+  .about-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 14px; }
+  .about-card h3 { font-family: var(--font-display); font-size: 16px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .about-card p { font-size: 14px; color: var(--muted); line-height: 1.7; }
+  .about-card p + p { margin-top: 8px; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+  .empty-state p { font-family: var(--font-display); font-size: 14px; letter-spacing: 0.06em; }
+
+  @media (max-width: 480px) {
+    .splits-row { grid-template-columns: repeat(3, 1fr); }
+    .weather-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+    .form-field.full { grid-column: 1; }
+    .dial-display { font-size: 64px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">GTO <span>/ Dial</span></div>
+  <button class="nav-tab active" onclick="showView('predict')">Predict</button>
+  <button class="nav-tab" onclick="showView('log')">Log Run</button>
+  <button class="nav-tab" onclick="showView('runs')">Run History</button>
+  <button class="nav-tab" onclick="showView('about')">About</button>
+</nav>
+
+<!-- PREDICT VIEW -->
+<div class="view active" id="view-predict">
+  <div class="predict-hero">
+    <h1>Predicted Dial-In</h1>
+    <div class="dial-display na" id="dial-et">—</div>
+    <div class="dial-sub" id="dial-sub">Enter conditions below</div>
+    <div class="confidence-bar-wrap" id="conf-wrap" style="display:none!important">
+      <div class="conf-track"><div class="conf-fill" id="conf-fill" style="width:0%"></div></div>
+      <span class="conf-label" id="conf-label"></span>
+    </div>
+  </div>
+
+  <div class="splits-row" id="splits-row">
+    <div class="split-card"><div class="sl">60 ft</div><div class="sv" id="p60">—</div></div>
+    <div class="split-card"><div class="sl">330 ft</div><div class="sv" id="p330">—</div></div>
+    <div class="split-card"><div class="sl">660 ft</div><div class="sv" id="p660">—</div></div>
+    <div class="split-card"><div class="sl">1000 ft</div><div class="sv" id="p1000">—</div></div>
+    <div class="split-card"><div class="sl">MPH</div><div class="sv" id="pMPH">—</div></div>
+  </div>
+
+  <div class="section-title">Current conditions</div>
+
+  <div class="weather-fetch-bar">
+    <div style="flex:1;min-width:160px">
+      <div class="wf-status" id="wf-status">Tap to fetch live weather at your location</div>
+      <div class="fetched-pills" id="wf-pills" style="display:none"></div>
+    </div>
+    <button class="btn-weather" id="wf-btn" onclick="fetchWeather()">📡 Get Live Weather</button>
+  </div>
+
+  <div class="weather-grid">
+    <div class="weather-field">
+      <label>Track</label>
+      <select id="trackSelect" onchange="onConditionChange()">
+        <option value="">— select track —</option>
+        <option value="The Bend">The Bend</option>
+        <option value="Sydney Dragway">Sydney Dragway</option>
+        <option value="Willowbank">Willowbank Raceway</option>
+      </select>
+    </div>
+    <div class="weather-field">
+      <label>STD Correction Factor</label>
+      <input type="number" id="stdInput" step="0.001" placeholder="e.g. 1.032" oninput="onConditionChange()">
+      <div class="weather-hint" id="std-hint">Enter as decimal (e.g. 1.032)</div>
+    </div>
+    <div class="weather-field">
+      <label>Temp (°C)</label>
+      <input type="number" id="tempInput" step="0.1" placeholder="e.g. 22" oninput="calcSTD()">
+    </div>
+    <div class="weather-field">
+      <label>Humidity (%)</label>
+      <input type="number" id="humInput" step="1" placeholder="e.g. 55" oninput="calcSTD()">
+    </div>
+    <div class="weather-field">
+      <label>Baro Pressure (hPa)</label>
+      <input type="number" id="baroInput" step="0.1" placeholder="e.g. 1013" oninput="calcSTD()">
+    </div>
+    <div class="weather-field">
+      <label>Time of Day</label>
+      <select id="todSelect" onchange="onConditionChange()">
+        <option value="any">Any</option>
+        <option value="morning">Morning (before 11am)</option>
+        <option value="midday">Midday (11am–3pm)</option>
+        <option value="afternoon">Afternoon (after 3pm)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="std-result" id="std-calc-result" style="display:none">
+    <span class="label">Calculated STD factor</span>
+    <span class="value" id="std-calc-val">—</span>
+  </div>
+
+  <div id="match-box" class="match-info" style="display:none"></div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="predict()">Calculate Dial-In</button>
+    <button class="btn btn-ghost" onclick="clearPredict()">Clear</button>
+  </div>
+</div>
+
+<!-- LOG RUN VIEW -->
+<div class="view" id="view-log">
+  <div class="section-title" style="border-top:none;margin-top:4px">Log a new run</div>
+
+  <div class="form-section">
+    <div class="form-section-title">Track & Conditions</div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>Track</label>
+        <select id="l-track">
+          <option value="The Bend">The Bend</option>
+          <option value="Sydney Dragway">Sydney Dragway</option>
+          <option value="Willowbank">Willowbank Raceway</option>
+          <option value="other">Other (type below)</option>
+        </select>
+      </div>
+      <div class="form-field" id="l-track-other-wrap" style="display:none">
+        <label>Track name</label>
+        <input type="text" id="l-track-other" placeholder="e.g. Calder Park">
+      </div>
+      <div class="form-field">
+        <label>Date</label>
+        <input type="date" id="l-date">
+      </div>
+      <div class="form-field">
+        <label>Time</label>
+        <input type="time" id="l-time">
+      </div>
+      <div class="form-field">
+        <label>STD Correction Factor</label>
+        <input type="number" id="l-std" step="0.001" placeholder="e.g. 1.032">
+      </div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">Reaction Time & Splits</div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>Reaction Time</label>
+        <input type="number" id="l-rt" step="0.001" placeholder="e.g. 0.042">
+      </div>
+      <div class="form-field">
+        <label>60 ft</label>
+        <input type="number" id="l-60" step="0.001" placeholder="e.g. 0.991">
+      </div>
+      <div class="form-field">
+        <label>330 ft</label>
+        <input type="number" id="l-330" step="0.001" placeholder="e.g. 2.720">
+      </div>
+      <div class="form-field">
+        <label>660 ft</label>
+        <input type="number" id="l-660" step="0.001" placeholder="e.g. 4.155">
+      </div>
+      <div class="form-field">
+        <label>1000 ft</label>
+        <input type="number" id="l-1000" step="0.001" placeholder="e.g. 5.385">
+      </div>
+      <div class="form-field">
+        <label>ET (Elapsed Time)</label>
+        <input type="number" id="l-et" step="0.001" placeholder="e.g. 6.415">
+      </div>
+      <div class="form-field">
+        <label>MPH</label>
+        <input type="number" id="l-mph" step="0.01" placeholder="e.g. 217.4">
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="logRun()">Save Run</button>
+    <button class="btn btn-ghost" onclick="clearLogForm()">Clear</button>
+  </div>
+  <div class="success-banner" id="log-success">✓ Run saved successfully!</div>
+</div>
+
+<!-- RUNS VIEW -->
+<div class="view" id="view-runs">
+  <div class="runs-toolbar">
+    <select id="filter-track" onchange="renderRuns()">
+      <option value="all">All Tracks</option>
+      <option value="The Bend">The Bend</option>
+      <option value="Sydney Dragway">Sydney Dragway</option>
+      <option value="Willowbank">Willowbank Raceway</option>
+    </select>
+    <select id="filter-flagged" onchange="renderRuns()">
+      <option value="all">All runs</option>
+      <option value="clean">Clean runs only</option>
+      <option value="flagged">Flagged only</option>
+    </select>
+    <span style="margin-left:auto;font-family:var(--font-display);font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted)" id="run-count"></span>
+  </div>
+  <div class="runs-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Track</th>
+          <th>STD</th>
+          <th>60ft</th>
+          <th>330ft</th>
+          <th>660ft</th>
+          <th>ET</th>
+          <th>MPH</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="runs-tbody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="runs-empty" style="display:none"><p>No runs match the current filter.</p></div>
+</div>
+
+<!-- ABOUT VIEW -->
+<div class="view" id="view-about">
+  <div class="about-card">
+    <h3>How prediction works</h3>
+    <p>The app finds your most similar historical runs based on STD Correction Factor (within ±0.015) at the same track. It then takes a weighted average of their elapsed times — more recent runs and closer STD matches count more heavily.</p>
+    <p>If no runs exist within that window, it widens the search up to ±0.04. The confidence score reflects how many matching runs were found and how closely they match your current conditions.</p>
+    <p>Time of day is used as a secondary filter — if you select Morning/Midday/Afternoon, runs from the same period get a small boost in weighting. Flagged runs (unusual MPH suggesting a problem mid-pass) are automatically excluded from predictions.</p>
+  </div>
+  <div class="about-card">
+    <h3>STD Correction Factor</h3>
+    <p>STD (Standard Day) correction normalises your run data to standard atmospheric conditions. A factor of 1.000 = perfect standard day. Above 1.000 = air is less dense, the car tends to run slower. Below 1.000 = denser air, faster runs.</p>
+    <p>The Bend records this as a 4-digit number (e.g. 1034 = 1.034). Sydney Dragway records it as a decimal. The app handles both formats automatically.</p>
+  </div>
+  <div class="about-card">
+    <h3>Manual STD calculator</h3>
+    <p>On the Predict tab you can enter temperature, humidity, and barometric pressure to calculate an estimated STD correction factor automatically. This uses the standard ICAO atmosphere formula used in motorsport.</p>
+  </div>
+  <div class="about-card">
+    <h3>Data storage</h3>
+    <p>All run data is stored in your browser's local storage. It stays on your device and is not sent anywhere. Use the Log Run tab to add new passes after each event. Your data will persist between sessions as long as you use the same browser.</p>
+  </div>
+</div>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────────
+
+const SEED_RUNS = [
+  {track:"The Bend",date:"2024-04-05",time:"05:40",std:1.021,rt:0.057,s60:1.135,s330:3.05,s660:4.553,s1000:5.842,et:6.923,mph:208.95,flagged:false},
+  {track:"The Bend",date:"2024-04-06",time:"12:11",std:1.026,rt:0.031,s60:1.105,s330:2.985,s660:4.476,s1000:5.758,et:6.837,mph:208.27,flagged:false},
+  {track:"The Bend",date:"2024-04-06",time:"15:18",std:1.034,rt:0.112,s60:1.13,s330:3.034,s660:4.529,s1000:5.808,et:6.882,mph:210.18,flagged:false},
+  {track:"The Bend",date:"2024-10-05",time:"16:53",std:1.025,rt:0.557,s60:1.026,s330:2.805,s660:4.235,s1000:5.465,et:6.504,mph:215.92,flagged:false},
+  {track:"The Bend",date:"2024-10-05",time:"18:25",std:1.022,rt:0.832,s60:1.017,s330:2.77,s660:4.191,s1000:5.4141,et:6.449,mph:216.62,flagged:false},
+  {track:"The Bend",date:"2025-01-18",time:"11:54",std:1.044,rt:0.061,s60:1.01,s330:2.754,s660:4.166,s1000:5.386,et:6.531,mph:184.4,flagged:true},
+  {track:"The Bend",date:"2025-01-18",time:"14:12",std:1.053,rt:0.125,s60:1.032,s330:2.795,s660:4.23,s1000:5.586,et:6.975,mph:152.43,flagged:true},
+  {track:"The Bend",date:"2025-01-18",time:"15:52",std:1.054,rt:-0.005,s60:1.032,s330:2.794,s660:4.222,s1000:5.456,et:6.504,mph:215.83,flagged:false},
+  {track:"The Bend",date:"2025-03-01",time:"10:49",std:1.031,rt:0.151,s60:0.991,s330:2.725,s660:4.137,s1000:5.354,et:6.383,mph:219.16,flagged:false},
+  {track:"The Bend",date:"2025-03-01",time:"12:09",std:1.044,rt:-0.007,s60:1.009,s330:2.743,s660:4.156,s1000:5.374,et:6.404,mph:217.75,flagged:false},
+  {track:"The Bend",date:"2025-04-04",time:"12:32",std:1.018,rt:-0.073,s60:0.983,s330:2.685,s660:4.074,s1000:5.271,et:6.283,mph:222.86,flagged:false},
+  {track:"The Bend",date:"2025-04-25",time:"13:30",std:1.034,rt:-0.006,s60:0.995,s330:2.728,s660:4.14,s1000:5.361,et:6.392,mph:218.79,flagged:false},
+  {track:"The Bend",date:"2025-04-26",time:"09:46",std:1.030,rt:0.001,s60:0.991,s330:2.712,s660:4.116,s1000:5.326,et:6.355,mph:215.1,flagged:false},
+  {track:"The Bend",date:"2025-04-26",time:"12:52",std:1.029,rt:-0.024,s60:0.991,s330:2.716,s660:4.123,s1000:5.335,et:6.358,mph:220.65,flagged:false},
+  {track:"The Bend",date:"2025-10-03",time:"13:52",std:1.029,rt:-0.008,s60:1.003,s330:2.756,s660:4.178,s1000:5.404,et:6.44,mph:217.69,flagged:false},
+  {track:"The Bend",date:"2025-10-03",time:"15:52",std:1.022,rt:0.035,s60:1.001,s330:2.739,s660:4.15,s1000:5.363,et:6.389,mph:219.84,flagged:false},
+  {track:"The Bend",date:"2025-10-04",time:"12:35",std:1.036,rt:0.018,s60:1.007,s330:2.753,s660:4.175,s1000:5.403,et:6.441,mph:217.3,flagged:false},
+  {track:"The Bend",date:"2025-10-04",time:"15:08",std:1.045,rt:0.084,s60:1.016,s330:2.781,s660:4.211,s1000:5.463,et:6.693,mph:170.78,flagged:true},
+  {track:"Sydney Dragway",date:"2026-01-24",time:"21:04",std:1.053,rt:0.027,s60:1.014,s330:2.786,s660:4.232,s1000:5.478,et:6.533,mph:214.18,flagged:false},
+  {track:"Sydney Dragway",date:"2026-01-24",time:"10:25",std:1.053,rt:-0.029,s60:1.006,s330:2.822,s660:4.312,s1000:5.575,et:6.637,mph:212.76,flagged:false},
+  {track:"Sydney Dragway",date:"2026-01-24",time:"12:14",std:1.063,rt:-0.01,s60:1.0,s330:2.789,s660:4.235,s1000:5.482,et:6.537,mph:213.98,flagged:false},
+  {track:"Sydney Dragway",date:"2026-01-24",time:"14:41",std:1.076,rt:0.02,s60:1.025,s330:2.813,s660:4.275,s1000:5.554,et:6.599,mph:211.95,flagged:false},
+  {track:"Sydney Dragway",date:"2026-01-24",time:"18:47",std:1.064,rt:0.074,s60:1.03,s330:2.813,s660:4.268,s1000:5.521,et:6.592,mph:204.01,flagged:false},
+  {track:"The Bend",date:"2026-03-28",time:"11:18",std:1.015,rt:0.006,s60:0.994,s330:2.743,s660:4.166,s1000:5.39,et:6.422,mph:218.33,flagged:false},
+  {track:"Sydney Dragway",date:"2026-05-01",time:"09:51",std:1.023,rt:0.002,s60:0.98,s330:2.72,s660:4.146,s1000:5.376,et:6.415,mph:217.35,flagged:false},
+  {track:"Sydney Dragway",date:"2026-05-01",time:"14:16",std:1.032,rt:0.075,s60:0.998,s330:2.752,s660:4.189,s1000:5.428,et:6.472,mph:216.51,flagged:false},
+  {track:"Sydney Dragway",date:"2026-05-01",time:"16:41",std:1.027,rt:0.068,s60:0.996,s330:2.736,s660:4.161,s1000:5.392,et:6.433,mph:217.04,flagged:false},
+  {track:"Sydney Dragway",date:"2026-05-02",time:"10:23",std:1.038,rt:0.032,s60:0.998,s330:2.749,s660:4.183,s1000:5.419,et:6.463,mph:216.31,flagged:false},
+  {track:"Sydney Dragway",date:"2026-05-02",time:"19:06",std:1.030,rt:-0.019,s60:1.0,s330:2.751,s660:4.186,s1000:5.424,et:6.47,mph:215.86,flagged:false},
+  {track:"Sydney Dragway",date:"2026-05-02",time:"08:27",std:1.029,rt:0.241,s60:1.004,s330:2.753,s660:4.184,s1000:5.42,et:6.465,mph:216.41,flagged:false},
+];
+
+function loadRuns() {
+  const saved = localStorage.getItem('gto_runs');
+  if (saved) {
+    try { return JSON.parse(saved); } catch(e) {}
+  }
+  localStorage.setItem('gto_runs', JSON.stringify(SEED_RUNS));
+  return SEED_RUNS;
+}
+
+function saveRuns(runs) {
+  localStorage.setItem('gto_runs', JSON.stringify(runs));
+}
+
+function getRuns() { return loadRuns(); }
+
+// ─── NAVIGATION ──────────────────────────────────────────────────────────────
+
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelector(`[onclick="showView('${name}')"]`).classList.add('active');
+  if (name === 'runs') renderRuns();
+  if (name === 'log') initLogForm();
+}
+
+// ─── STD CALCULATOR ──────────────────────────────────────────────────────────
+
+function calcSTD() {
+  const T = parseFloat(document.getElementById('tempInput').value);
+  const H = parseFloat(document.getElementById('humInput').value);
+  const P = parseFloat(document.getElementById('baroInput').value);
+  if (isNaN(T) || isNaN(H) || isNaN(P)) {
+    document.getElementById('std-calc-result').style.display = 'none';
+    return;
+  }
+  // Saturation vapour pressure (Magnus)
+  const Psat = 6.1078 * Math.exp((17.27 * T) / (T + 237.3));
+  // Actual vapour pressure
+  const Pv = (H / 100) * Psat;
+  // Dry air pressure
+  const Pd = P - Pv;
+  // Standard day: 15°C, 0% humidity, 1013.25 hPa
+  const T_std = 288.15; // K
+  const P_std = 1013.25;
+  const T_k = T + 273.15;
+  // STD factor ≈ ratio that normalises to standard conditions
+  const std = (P_std / Pd) * (T_k / T_std);
+  const rounded = Math.round(std * 1000) / 1000;
+  document.getElementById('std-calc-val').textContent = rounded.toFixed(3);
+  document.getElementById('std-calc-result').style.display = 'flex';
+  document.getElementById('stdInput').value = rounded.toFixed(3);
+  onConditionChange();
+}
+
+// ─── PREDICTION ───────────────────────────────────────────────────────────────
+
+function timeOfDayBucket(timeStr) {
+  if (!timeStr) return 'any';
+  const h = parseInt(timeStr.split(':')[0]);
+  if (h < 11) return 'morning';
+  if (h < 15) return 'midday';
+  return 'afternoon';
+}
+
+function onConditionChange() { /* live — don't auto-predict, let user press button */ }
+
+function predict() {
+  const track = document.getElementById('trackSelect').value;
+  const stdRaw = parseFloat(document.getElementById('stdInput').value);
+  const tod = document.getElementById('todSelect').value;
+
+  if (!track || isNaN(stdRaw)) {
+    alert('Please select a track and enter an STD Correction Factor.');
+    return;
+  }
+
+  // Normalise STD — The Bend sometimes stored as 4-digit e.g. 1034
+  const std = stdRaw > 10 ? stdRaw / 1000 : stdRaw;
+
+  const runs = getRuns().filter(r => !r.flagged && r.track === track);
+
+  // Cross-track fallback for tracks with no history (e.g. Willowbank)
+  let usingFallback = false;
+  let fallbackNote = '';
+  let searchRuns = runs;
+
+  if (runs.length === 0) {
+    searchRuns = getRuns().filter(r => !r.flagged);
+    if (searchRuns.length === 0) { showNoData('No run data at all yet. Log some runs first!'); return; }
+    usingFallback = true;
+    fallbackNote = `No ${track} history yet — using cross-track estimate from all ${searchRuns.length} runs. Log your first Willowbank pass to improve accuracy.`;
+  }
+
+  // Try progressively wider windows
+  let candidates = [];
+  for (const window of [0.012, 0.025, 0.04, 0.06]) {
+    candidates = searchRuns.filter(r => Math.abs(r.std - std) <= window);
+    if (candidates.length >= 2) break;
+  }
+
+  if (candidates.length === 0) {
+    showNoData('No runs found near this STD factor. Log more runs!');
+    return;
+  }
+
+  // Sort by date descending for recency index
+  const sorted = [...candidates].sort((a, b) => b.date.localeCompare(a.date));
+
+  // Weighted average: closer STD = higher weight, more recent = higher weight
+  let totalWeight = 0;
+  let wET = 0, w60 = 0, w330 = 0, w660 = 0, w1000 = 0, wMPH = 0;
+
+  sorted.forEach((r, i) => {
+    const stdDiff = Math.abs(r.std - std);
+    const stdW = 1 / (stdDiff + 0.001);
+    const recencyW = 1 / (i + 1);
+    const todW = (tod !== 'any' && timeOfDayBucket(r.time) === tod) ? 1.4 : 1.0;
+    const w = stdW * recencyW * todW;
+    totalWeight += w;
+    wET += r.et * w;
+    w60 += r.s60 * w;
+    w330 += r.s330 * w;
+    w660 += r.s660 * w;
+    w1000 += r.s1000 * w;
+    wMPH += r.mph * w;
+  });
+
+  const predET = wET / totalWeight;
+  const pred60 = w60 / totalWeight;
+  const pred330 = w330 / totalWeight;
+  const pred660 = w660 / totalWeight;
+  const pred1000 = w1000 / totalWeight;
+  const predMPH = wMPH / totalWeight;
+
+  // Confidence: based on count and how tight the STD match is
+  const avgDiff = candidates.reduce((s, r) => s + Math.abs(r.std - std), 0) / candidates.length;
+  const conf = Math.min(100, Math.round((candidates.length / 5) * 60 + (1 - avgDiff / 0.06) * 40));
+
+  // Display
+  const dialEl = document.getElementById('dial-et');
+  dialEl.textContent = predET.toFixed(3);
+  dialEl.classList.remove('na');
+  dialEl.style.fontSize = '';
+
+  const subText = usingFallback
+    ? `Cross-track estimate · ${candidates.length} runs from all tracks`
+    : `Based on ${candidates.length} matching run${candidates.length !== 1 ? 's' : ''} · ${track}`;
+  document.getElementById('dial-sub').textContent = subText;
+
+  document.getElementById('p60').textContent = pred60.toFixed(3);
+  document.getElementById('p330').textContent = pred330.toFixed(3);
+  document.getElementById('p660').textContent = pred660.toFixed(3);
+  document.getElementById('p1000').textContent = pred1000.toFixed(3);
+  document.getElementById('pMPH').textContent = predMPH.toFixed(1);
+
+  const confWrap = document.getElementById('conf-wrap');
+  confWrap.style.display = 'flex';
+  confWrap.style.setProperty('display', 'flex', 'important');
+  document.getElementById('conf-fill').style.width = conf + '%';
+  document.getElementById('conf-label').textContent = conf + '% confidence';
+
+  // Match info
+  const closest = [...candidates].sort((a, b) => Math.abs(a.std - std) - Math.abs(b.std - std))[0];
+  const diffStr = (std - closest.std >= 0 ? '+' : '') + (std - closest.std).toFixed(3);
+  document.getElementById('match-box').style.display = 'block';
+  document.getElementById('match-box').innerHTML = usingFallback
+    ? `<span style="color:var(--accent);font-weight:500">⚠ Cross-track estimate</span> — ${fallbackNote}<br><br>
+       Closest match: <strong>${closest.date}</strong> · <strong>${closest.track}</strong> · STD ${closest.std.toFixed(3)} · ET ${closest.et.toFixed(3)} · ${closest.mph.toFixed(1)} mph`
+    : `<strong>${candidates.length}</strong> runs matched at <strong>${track}</strong> (STD ±${(candidates.reduce((s,r)=>s+Math.abs(r.std-std),0)/candidates.length).toFixed(3)}).<br>
+       Closest historical run: <strong>${closest.date}</strong> · STD ${closest.std.toFixed(3)} (${(std-closest.std>=0?'+':'')+(std-closest.std).toFixed(3)}) · ET ${closest.et.toFixed(3)} · ${closest.mph.toFixed(1)} mph`;
+}
+
+function showNoData(msg) {
+  const dialEl = document.getElementById('dial-et');
+  dialEl.textContent = '—';
+  dialEl.classList.add('na');
+  document.getElementById('dial-sub').textContent = msg || 'No data available';
+  document.getElementById('conf-wrap').style.setProperty('display', 'none', 'important');
+  document.getElementById('match-box').style.display = 'none';
+  document.getElementById('p60').textContent = '—';
+  document.getElementById('p330').textContent = '—';
+  document.getElementById('p660').textContent = '—';
+  document.getElementById('p1000').textContent = '—';
+  document.getElementById('pMPH').textContent = '—';
+}
+
+// ─── LIVE WEATHER FETCH ──────────────────────────────────────────────────────
+
+async function fetchWeather() {
+  const btn = document.getElementById('wf-btn');
+  const status = document.getElementById('wf-status');
+  const pills = document.getElementById('wf-pills');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Locating...';
+  status.className = 'wf-status loading';
+  status.textContent = 'Getting your GPS location...';
+  pills.style.display = 'none';
+
+  if (!navigator.geolocation) {
+    setWeatherError('GPS not available on this device.');
+    btn.disabled = false;
+    btn.textContent = '📡 Get Live Weather';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const { latitude: lat, longitude: lon } = pos.coords;
+      status.textContent = 'Got location — fetching weather...';
+      btn.textContent = '⏳ Fetching...';
+
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=temperature_2m,relative_humidity_2m,surface_pressure&wind_speed_unit=mph&timezone=auto`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('API error ' + res.status);
+        const data = await res.json();
+        const c = data.current;
+
+        const temp = c.temperature_2m;
+        const hum = c.relative_humidity_2m;
+        const baro = c.surface_pressure;
+
+        // Fill the fields
+        document.getElementById('tempInput').value = temp.toFixed(1);
+        document.getElementById('humInput').value = Math.round(hum);
+        document.getElementById('baroInput').value = baro.toFixed(1);
+
+        // Trigger STD calc
+        calcSTD();
+
+        // Show success state
+        status.className = 'wf-status ok';
+        status.textContent = `Live weather fetched · ${new Date().toLocaleTimeString('en-AU', {hour:'2-digit',minute:'2-digit'})}`;
+        pills.style.display = 'flex';
+        pills.innerHTML = `
+          <span class="fetched-pill">${temp.toFixed(1)}°C</span>
+          <span class="fetched-pill">${Math.round(hum)}% RH</span>
+          <span class="fetched-pill">${baro.toFixed(1)} hPa</span>
+        `;
+        btn.textContent = '📡 Refresh Weather';
+      } catch(e) {
+        setWeatherError('Could not reach weather service. Check your internet.');
+        btn.textContent = '📡 Try Again';
+      }
+      btn.disabled = false;
+    },
+    (err) => {
+      btn.disabled = false;
+      btn.textContent = '📡 Try Again';
+      if (err.code === 1) {
+        setWeatherError('Location permission denied. Allow location access and try again.');
+      } else if (err.code === 2) {
+        setWeatherError('Could not determine location. Try moving outside.');
+      } else {
+        setWeatherError('Location timed out. Please try again.');
+      }
+    },
+    { timeout: 10000, maximumAge: 60000 }
+  );
+}
+
+function setWeatherError(msg) {
+  const status = document.getElementById('wf-status');
+  status.className = 'wf-status err';
+  status.textContent = msg;
+}
+
+
+function clearPredict() {
+  document.getElementById('trackSelect').value = '';
+  document.getElementById('stdInput').value = '';
+  document.getElementById('tempInput').value = '';
+  document.getElementById('humInput').value = '';
+  document.getElementById('baroInput').value = '';
+  document.getElementById('todSelect').value = 'any';
+  document.getElementById('std-calc-result').style.display = 'none';
+  document.getElementById('wf-status').className = 'wf-status';
+  document.getElementById('wf-status').textContent = 'Tap to fetch live weather at your location';
+  document.getElementById('wf-pills').style.display = 'none';
+  document.getElementById('wf-btn').textContent = '📡 Get Live Weather';
+  showNoData();
+}
+
+// ─── LOG RUN ─────────────────────────────────────────────────────────────────
+
+function initLogForm() {
+  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  document.getElementById('l-date').value = today;
+  document.getElementById('l-time').value = `${hh}:${mm}`;
+  document.getElementById('l-track').addEventListener('change', function() {
+    document.getElementById('l-track-other-wrap').style.display = this.value === 'other' ? 'flex' : 'none';
+  });
+}
+
+function logRun() {
+  const trackSel = document.getElementById('l-track').value;
+  const track = trackSel === 'other' ? (document.getElementById('l-track-other').value.trim() || 'Unknown') : trackSel;
+  const date = document.getElementById('l-date').value;
+  const time = document.getElementById('l-time').value;
+  const std = parseFloat(document.getElementById('l-std').value);
+  const rt = parseFloat(document.getElementById('l-rt').value);
+  const s60 = parseFloat(document.getElementById('l-60').value);
+  const s330 = parseFloat(document.getElementById('l-330').value);
+  const s660 = parseFloat(document.getElementById('l-660').value);
+  const s1000 = parseFloat(document.getElementById('l-1000').value);
+  const et = parseFloat(document.getElementById('l-et').value);
+  const mph = parseFloat(document.getElementById('l-mph').value);
+
+  if (!date || isNaN(std) || isNaN(et) || isNaN(mph)) {
+    alert('Please fill in at least: Date, STD Factor, ET, and MPH.');
+    return;
+  }
+
+  // Auto-flag if MPH looks like a problem run (>15% below expected)
+  const runs = getRuns();
+  const trackRuns = runs.filter(r => r.track === track && !r.flagged);
+  let flagged = false;
+  if (trackRuns.length >= 3) {
+    const avgMPH = trackRuns.slice(-10).reduce((s, r) => s + r.mph, 0) / Math.min(trackRuns.length, 10);
+    if (mph < avgMPH * 0.92) flagged = true;
+  }
+
+  const run = { track, date, time, std: std > 10 ? std / 1000 : std, rt: isNaN(rt) ? null : rt,
+    s60: isNaN(s60) ? null : s60, s330: isNaN(s330) ? null : s330, s660: isNaN(s660) ? null : s660,
+    s1000: isNaN(s1000) ? null : s1000, et, mph, flagged };
+
+  runs.push(run);
+  saveRuns(runs);
+
+  const banner = document.getElementById('log-success');
+  banner.style.display = 'block';
+  banner.textContent = flagged ? '✓ Run saved — auto-flagged (low MPH, may be a problem run). Check in Run History.' : '✓ Run saved successfully!';
+  setTimeout(() => { banner.style.display = 'none'; }, 3500);
+  clearLogForm(true);
+}
+
+function clearLogForm(keepDate) {
+  if (!keepDate) {
+    document.getElementById('l-date').value = '';
+    document.getElementById('l-time').value = '';
+  }
+  ['l-std','l-rt','l-60','l-330','l-660','l-1000','l-et','l-mph'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+}
+
+// ─── RUN HISTORY ─────────────────────────────────────────────────────────────
+
+function trackBadgeClass(track) {
+  if (track === 'The Bend') return 'track-bend';
+  if (track === 'Sydney Dragway') return 'track-sydney';
+  if (track === 'Willowbank') return 'track-willowbank';
+  return 'track-other';
+}
+
+function renderRuns() {
+  const filterTrack = document.getElementById('filter-track').value;
+  const filterFlagged = document.getElementById('filter-flagged').value;
+  let runs = getRuns();
+
+  if (filterTrack !== 'all') runs = runs.filter(r => r.track === filterTrack);
+  if (filterFlagged === 'clean') runs = runs.filter(r => !r.flagged);
+  if (filterFlagged === 'flagged') runs = runs.filter(r => r.flagged);
+
+  runs = [...runs].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+
+  const tbody = document.getElementById('runs-tbody');
+  const empty = document.getElementById('runs-empty');
+  document.getElementById('run-count').textContent = runs.length + ' runs';
+
+  if (runs.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = runs.map((r, i) => {
+    const allRuns = getRuns();
+    const realIdx = allRuns.findIndex(x => x.date === r.date && x.time === r.time && x.track === r.track && x.et === r.et);
+    return `<tr class="${r.flagged ? 'flagged' : ''}">
+      <td>${r.date}</td>
+      <td>${r.time || '—'}</td>
+      <td><span class="track-badge ${trackBadgeClass(r.track)}">${r.track}</span></td>
+      <td>${r.std.toFixed(3)}${r.flagged ? '<span class="flag-badge">FLAGGED</span>' : ''}</td>
+      <td>${r.s60 != null ? r.s60.toFixed(3) : '—'}</td>
+      <td>${r.s330 != null ? r.s330.toFixed(3) : '—'}</td>
+      <td>${r.s660 != null ? r.s660.toFixed(3) : '—'}</td>
+      <td>${r.et.toFixed(3)}</td>
+      <td>${r.mph.toFixed(1)}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="toggleFlag(${realIdx})">${r.flagged ? 'Unflag' : 'Flag'}</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleFlag(idx) {
+  const runs = getRuns();
+  if (runs[idx]) {
+    runs[idx].flagged = !runs[idx].flagged;
+    saveRuns(runs);
+    renderRuns();
+  }
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+loadRuns(); // ensure seed data written
+</script>
+</body>
+</html>
